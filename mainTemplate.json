@@ -1,0 +1,280 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "_artifactsLocation": {
+      "type": "string",
+      "defaultValue": "https://www.test-ground.com/azure/",
+      "metadata": {
+        "description": "The base URI where artifacts required by this template are located including a trailing '/'"
+      }
+    },
+    "_artifactsLocationSasToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated. Use the defaultValue if the staging location is not secured."
+      }
+    },
+    "adminCIDR": {
+      "type": "string",
+      "defaultValue": "none",
+      "metadata": {
+        "description": "A valid IP range in CIDR notation to allow administrative traffic from, or 'none'."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the root/admin account on deployed virtual machine(s)."
+      }
+    },
+    "appliancesCount": {
+      "type": "int",
+      "metadata": {
+        "description": "Indicates the number of SMA appliance instances to be deployed."
+      }
+    },
+    "appliancesSize": {
+      "type": "string",
+      "defaultValue": "none",
+      "metadata": {
+        "description": "Instance size of appliance VMs to be deployed, or 'none' if Appliances Count is 0."
+      }
+    },
+    "CMSDeploy": {
+      "type": "bool",
+      "metadata": {
+        "description": "Deploy a CMS instance to manage deployed appliances?"
+      }
+    },
+    "CMSSize": {
+      "type": "string",
+      "defaultValue": "none",
+      "metadata": {
+        "description": "Instance size of CMS VM to be deployed, or 'none' if CMS Deploy is false."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "smaBranch": {
+      "type": "string",
+      "metadata": {
+        "description": "SMA1000 branch to be deployed."
+      }
+    },
+    "sshPublicKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Deployed virtual machines will have this public key added to the admin user's authorized_keys."
+      }
+    },
+    "subnetCIDR": {
+      "type": "string",
+      "metadata": {
+        "description": "A valid network address in CIDR notation to be used for the deployed subnet. Must be contained within the specified virtual network."
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the subnet to deploy appliance(s) to."
+      }
+    },
+    "subnetResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Name of the resource group the subnet will be created in or for an existing subnet the resource group it is in."
+      }
+    },
+    "virtualNetworkCIDR": {
+      "type": "string",
+      "metadata": {
+        "description": "A valid network address in CIDR notation to be used for the deployed virtual network."
+      }
+    },
+    "virtualNetworkCreate": {
+      "type": "bool",
+      "metadata": {
+        "description": "Indicates if the virtual network already exists or if it needs to be created."
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the virtual network to deploy appliance(s) to."
+      }
+    },
+    "vpnAccessCIDR": {
+      "type": "string",
+      "defaultValue": "0.0.0.0/0",
+      "metadata": {
+        "description": "Allow access to VPN and Workplace resources to this IP range, or 'none' if Appliances Count is 0."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2019-10-01",
+      "name": "sma1000-deployment-network",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[concat(uri(parameters('_artifactsLocation'), 'nestedtemplates/networkTemplate.json'), parameters('_artifactsLocationSasToken'))]"
+        },
+        "parameters": {
+          "adminCIDR": {
+            "value": "[parameters('adminCIDR')]"
+          },
+          "createCentralManagementSecurityRules": {
+            "value": "[and(parameters('CMSDeploy'), greater(parameters('appliancesCount'), 0))]"
+          },
+          "createVpnSecurityRules": {
+            "value": "[greater(parameters('appliancesCount'), 0)]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "subnetCIDR": {
+            "value": "[parameters('subnetCIDR')]"
+          },
+          "subnetName": {
+            "value": "[parameters('subnetName')]"
+          },
+          "virtualNetworkCIDR": {
+            "value": "[parameters('virtualNetworkCIDR')]"
+          },
+          "virtualNetworkCreate": {
+            "value": "[parameters('virtualNetworkCreate')]"
+          },
+          "virtualNetworkName": {
+            "value": "[parameters('virtualNetworkName')]"
+          },
+          "vpnAccessCIDR": {
+            "value": "[parameters('vpnAccessCIDR')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2019-10-01",
+      "name": "[concat('sma1000-deployment-appliances-', copyIndex('sma1000-deployment-appliances-copy', 1))]",
+      "dependsOn": [
+        "sma1000-deployment-network"
+      ],
+      "copy": {
+        "name": "sma1000-deployment-appliances-copy",
+        "count": "[parameters('appliancesCount')]"
+      },
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[concat(uri(parameters('_artifactsLocation'), 'nestedtemplates/smaTemplate.json'), parameters('_artifactsLocationSasToken'))]"
+        },
+        "parameters": {
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "applicationSecurityGroupIds": {
+            "value": "[concat(array(reference('sma1000-deployment-network').outputs.vpnSecurityGroupId.value), if(not(empty(reference('sma1000-deployment-network').outputs.allSecurityGroupId.value)), array(reference('sma1000-deployment-network').outputs.allSecurityGroupId.value), json('[]')), if(not(empty(reference('sma1000-deployment-network').outputs.centralManagementSecurityGroupId.value)), array(reference('sma1000-deployment-network').outputs.centralManagementSecurityGroupId.value), json('[]')))]"
+          },
+          "centralManagementEnabled": {
+            "value": "[parameters('CMSDeploy')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkSecurityGroupId": {
+            "value": "[reference('sma1000-deployment-network').outputs.networkSecurityGroupId.value]"
+          },
+          "product": {
+            "value": "SMA"
+          },
+          "smaBranch": {
+            "value": "[parameters('smaBranch')]"
+          },
+          "sshPublicKey": {
+            "value": "[parameters('sshPublicKey')]"
+          },
+          "subnetId": {
+            "value": "[resourceId(parameters('subnetResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+          },
+          "virtualMachineName": {
+            "value": "[concat('vm-', 'sma1000-', padLeft(copyIndex('sma1000-deployment-appliances-copy', 1), 3, '0'))]"
+          },
+          "virtualMachineSize": {
+            "value": "[parameters('appliancesSize')]"
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('CMSDeploy')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2019-10-01",
+      "name": "sma1000-deployment-cms",
+      "dependsOn": [
+        "sma1000-deployment-network"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[concat(uri(parameters('_artifactsLocation'), 'nestedtemplates/smaTemplate.json'), parameters('_artifactsLocationSasToken'))]"
+        },
+        "parameters": {
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "applicationSecurityGroupIds": {
+            "value": "[concat(if(not(empty(reference('sma1000-deployment-network').outputs.allSecurityGroupId.value)), array(reference('sma1000-deployment-network').outputs.allSecurityGroupId.value), json('[]')), if(not(empty(reference('sma1000-deployment-network').outputs.centralManagementSecurityGroupId.value)), array(reference('sma1000-deployment-network').outputs.centralManagementSecurityGroupId.value), json('[]')))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkSecurityGroupId": {
+            "value": "[reference('sma1000-deployment-network').outputs.networkSecurityGroupId.value]"
+          },
+          "product": {
+            "value": "CMS"
+          },
+          "smaBranch": {
+            "value": "[parameters('smaBranch')]"
+          },
+          "sshPublicKey": {
+            "value": "[parameters('sshPublicKey')]"
+          },
+          "subnetId": {
+            "value": "[resourceId(parameters('subnetResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+          },
+          "virtualMachineName": {
+            "value": "vm-sma1000cms-001"
+          },
+          "virtualMachineSize": {
+            "value": "[parameters('CMSSize')]"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "2020-06-01",
+      "name": "pid-a1b33024-6e5e-4c03-912e-e8db1c4f6361-partnercenter",
+      "type": "Microsoft.Resources/deployments",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
+    }
+  ]
+}

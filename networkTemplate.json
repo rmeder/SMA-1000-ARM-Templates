@@ -1,0 +1,289 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminCIDR": {
+      "type": "string",
+      "metadata": {
+        "description": "A valid IP range in CIDR notation to allow administrative traffic from, or 'none'."
+      }
+    },
+    "createCentralManagementSecurityRules": {
+      "type": "bool",
+      "metadata": {
+        "description": "Indicates if security rules for central management traffic should be created."
+      }
+    },
+    "createVpnSecurityRules": {
+      "type": "bool",
+      "metadata": {
+        "description": "Indicates if security rules for VPN appliance traffic should be created."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "subnetCIDR": {
+      "type": "string",
+      "metadata": {
+        "description": "A valid network address in CIDR notation to be used for the deployed subnet. Must be contained within the specified virtual network."
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the subnet to deploy appliance(s) to."
+      }
+    },
+    "virtualNetworkCIDR": {
+      "type": "string",
+      "metadata": {
+        "description": "A valid network address in CIDR notation to be used for the deployed virtual network."
+      }
+    },
+    "virtualNetworkCreate": {
+      "type": "bool",
+      "metadata": {
+        "description": "Indicates if the virtual network already exists or if it needs to be created."
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the virtual network to deploy appliance(s) to."
+      }
+    },
+    "vpnAccessCIDR": {
+      "type": "string",
+      "metadata": {
+        "description": "Allow access to VPN and Workplace resources to this IP range, or 'none' if Appliances Count is 0."
+      }
+    }
+  },
+  "resources": [
+    {
+      "condition": "[parameters('virtualNetworkCreate')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2019-04-01",
+      "name": "[parameters('virtualNetworkName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('virtualNetworkCIDR')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('subnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetCIDR')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[not(equals(parameters('adminCIDR'), 'none'))]",
+      "type": "Microsoft.Network/applicationSecurityGroups",
+      "apiVersion": "2019-04-01",
+      "name": "asg-sma1000all-001",
+      "location": "[parameters('location')]"
+    },
+    {
+      "condition": "[parameters('createCentralManagementSecurityRules')]",
+      "type": "Microsoft.Network/applicationSecurityGroups",
+      "apiVersion": "2019-04-01",
+      "name": "asg-sma1000cms-001",
+      "location": "[parameters('location')]"
+    },
+    {
+      "condition": "[parameters('createVpnSecurityRules')]",
+      "type": "Microsoft.Network/applicationSecurityGroups",
+      "apiVersion": "2019-04-01",
+      "name": "asg-sma1000vpn-001",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001",
+      "location": "[parameters('location')]"
+    },
+    {
+      "condition": "[parameters('createVpnSecurityRules')]",
+      "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001/AllowVpnTraffic",
+      "dependsOn": [
+        "asg-sma1000vpn-001",
+        "nsg-sma1000-001"
+      ],
+      "properties": {
+        "access": "Allow",
+        "description": "[concat('Allow VPN and Workplace traffic to SMA1000 appliances from ', parameters('vpnAccessCIDR'))]",
+        "destinationApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000vpn-001')]"
+          }
+        ],
+        "destinationPortRange": "443",
+        "direction": "Inbound",
+        "priority": 100,
+        "protocol": "Tcp",
+        "sourceaddressPrefix": "[if(equals(parameters('vpnAccessCIDR'), '0.0.0.0/0'), '*', parameters('vpnAccessCIDR'))]",
+        "sourcePortRange": "*"
+      }
+    },
+    {
+      "condition": "[parameters('createVpnSecurityRules')]",
+      "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001/AllowEspTraffic",
+      "dependsOn": [
+        "asg-sma1000vpn-001",
+        "nsg-sma1000-001"
+      ],
+      "properties": {
+        "access": "Allow",
+        "description": "[concat('Allow ESP traffic to SMA1000 appliances from ', parameters('vpnAccessCIDR'))]",
+        "destinationApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000vpn-001')]"
+          }
+        ],
+        "destinationPortRange": "4500",
+        "direction": "Inbound",
+        "priority": 101,
+        "protocol": "Udp",
+        "sourceaddressPrefix": "[if(equals(parameters('vpnAccessCIDR'), '0.0.0.0/0'), '*', parameters('vpnAccessCIDR'))]",
+        "sourcePortRange": "*"
+      }
+    },
+    {
+      "condition": "[parameters('createCentralManagementSecurityRules')]",
+      "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001/AllowCentralManagementTraffic",
+      "dependsOn": [
+        "asg-sma1000cms-001",
+        "nsg-sma1000-001"
+      ],
+      "properties": {
+        "access": "Allow",
+        "description": "Allow central management traffic between SMA1000 appliances",
+        "destinationApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000cms-001')]"
+          }
+        ],
+        "destinationPortRange": "*",
+        "direction": "Inbound",
+        "priority": 102,
+        "protocol": "*",
+        "sourceApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000cms-001')]"
+          }
+        ],
+        "sourcePortRange": "*"
+      }
+    },
+    {
+      "condition": "[not(equals(parameters('adminCIDR'), 'none'))]",
+      "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001/AllowAdminSSHTraffic",
+      "dependsOn": [
+        "asg-sma1000all-001",
+        "nsg-sma1000-001"
+      ],
+      "properties": {
+        "access": "Allow",
+        "description": "Allow SSH traffic from administrative CIDR block",
+        "destinationApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000all-001')]"
+          }
+        ],
+        "destinationPortRange": "22",
+        "direction": "Inbound",
+        "priority": 103,
+        "protocol": "Tcp",
+        "sourceAddressPrefix": "[parameters('adminCIDR')]",
+        "sourcePortRange": "*"
+      }
+    },
+    {
+      "condition": "[not(equals(parameters('adminCIDR'), 'none'))]",
+      "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001/AllowAdminWebTraffic",
+      "dependsOn": [
+        "asg-sma1000all-001",
+        "nsg-sma1000-001"
+      ],
+      "properties": {
+        "access": "Allow",
+        "description": "Allow HTTPS traffic to the admin web portal from administrative CIDR block",
+        "destinationApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000all-001')]"
+          }
+        ],
+        "destinationPortRange": "8443",
+        "direction": "Inbound",
+        "priority": 104,
+        "protocol": "Tcp",
+        "sourceAddressPrefix": "[parameters('adminCIDR')]",
+        "sourcePortRange": "*"
+      }
+    },
+    {
+      "condition": "[not(equals(parameters('adminCIDR'), 'none'))]",
+      "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+      "apiVersion": "2019-04-01",
+      "name": "nsg-sma1000-001/AllowAdminPingTraffic",
+      "dependsOn": [
+        "asg-sma1000all-001",
+        "nsg-sma1000-001"
+      ],
+      "properties": {
+        "access": "Allow",
+        "description": "Allow pings from administrative CIDR block",
+        "destinationApplicationSecurityGroups": [
+          {
+            "id": "[resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000all-001')]"
+          }
+        ],
+        "destinationPortRange": "8",
+        "direction": "Inbound",
+        "priority": 105,
+        "protocol": "Icmp",
+        "sourceAddressPrefix": "[parameters('adminCIDR')]",
+        "sourcePortRange": "*"
+      }
+    }
+  ],
+  "outputs": {
+    "allSecurityGroupId": {
+      "type": "string",
+      "value": "[if(not(equals(parameters('adminCIDR'), 'none')), resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000all-001'), '')]"
+    },
+    "centralManagementSecurityGroupId": {
+      "type": "string",
+      "value": "[if(parameters('createCentralManagementSecurityRules'), resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000cms-001'), '')]"
+    },
+    "networkSecurityGroupId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-sma1000-001')]"
+    },
+    "vpnSecurityGroupId": {
+      "type": "string",
+      "value": "[if(parameters('createVpnSecurityRules'), resourceId('Microsoft.Network/applicationSecurityGroups', 'asg-sma1000vpn-001'), '')]"
+    }
+  }
+}
