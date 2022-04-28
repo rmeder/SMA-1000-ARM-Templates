@@ -4,14 +4,14 @@
   "parameters": {
     "_artifactsLocation": {
       "type": "string",
-      "defaultValue": "https://www.test-ground.com/azure/",
+      "defaultValue": "https://github.com/rmeder/SMA-1000-ARM-Templates/",
       "metadata": {
         "description": "The base URI where artifacts required by this template are located including a trailing '/'"
       }
     },
     "_artifactsLocationSasToken": {
       "type": "securestring",
-      "defaultValue": "",
+      "defaultValue": "?token=GHSAT0AAAAAABUBRWOKNW3XX4MIHYH54Q5GYTLDX2Q",
       "metadata": {
         "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated. Use the defaultValue if the staging location is not secured."
       }
