@@ -1,0 +1,345 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+        "isWizard": false,
+        "basics": {
+            "description": "Customized description with **markdown**, see [more](https://www.microsoft.com).",
+            "subscription": {
+                "constraints": {
+                    "validations": [
+                        {
+                            "isValid": "[not(contains(subscription().displayName, 'Test'))]",
+                            "message": "Can't use test subscription."
+                        },
+                        {
+                            "permission": "Microsoft.Compute/virtualmachines/write",
+                            "message": "Must have write permission for the virtual machine."
+                        },
+                        {
+                            "permission": "Microsoft.Compute/virtualMachines/extensions/write",
+                            "message": "Must have write permission for the extension."
+                        }
+                    ]
+                },
+                "resourceProviders": [
+                    "Microsoft.Compute"
+                ]
+            },
+            "resourceGroup": {
+                "constraints": {
+                    "validations": [
+                        {
+                            "isValid": "[not(contains(resourceGroup().name, 'test'))]",
+                            "message": "Resource group name can't contain 'test'."
+                        }
+                    ]
+                },
+                "allowExisting": true
+            },
+            "location": {
+                "label": "Custom label for location",
+                "toolTip": "provide a useful tooltip",
+                "resourceTypes": [
+                    "Microsoft.Compute/virtualMachines"
+                ],
+                "allowedValues": [
+                    "eastus",
+                    "westus2"
+                ],
+                "visible": true
+            }
+        }
+    },
+    "basics": [
+      {
+        "name": "adminPassword",
+        "type": "Microsoft.Common.PasswordBox",
+        "label": {
+          "password": "Admin Password",
+          "confirmPassword": "Confirm Admin Password"
+        },
+        "subLabel": {
+          "preValidation": "",
+          "postValidation": "Done"
+        },
+        "toolTip": "Password for the root/admin account on deployed virtual machine(s).",
+        "constraints": {
+          "required": true,
+          "regex": "^((?=.*[a-z])(?=.*[A-Z])(?=.*\\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])|(?=.*[a-z])(?=.*\\d)(?=.*[^A-Za-z0-9])|(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]))([A-Za-z\\d\\W_]|\\.(?!@)){6,72}$",
+          "validationMessage": "Password must be between 6-72 characters long and contain at least 3 of the following: uppercase characters, lowercase characters, numeric digits, special characters"
+        }
+      },
+      {
+        "name": "sshPublicKey",
+        "type": "Microsoft.Compute.CredentialsCombo",
+        "label": {
+          "sshPublicKey": "SSH Public Key"
+        },
+        "toolTip": {
+          "sshPublicKey": "Deployed virtual machines will have this public key added to the admin user's authorized_keys. Only ssh-rsa, ecdsa-sha2-nistp256, and ecdsa-sha2-nistp384 keys are supported."
+        },
+        "constraints": {
+          "required": true
+        },
+        "options": {
+          "hidePassword": true
+        },
+        "osPlatform": "Linux"
+      }
+    ],
+    "steps": [
+      {
+        "name": "smaBranch",
+        "label": "SMA Branch",
+        "subLabel": {
+          "preValidation": "Configure SMA branch",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "SMA Branch",
+        "elements": [
+          {
+            "name": "smaBranchSection",
+            "type": "Microsoft.Common.Section",
+            "label": "Select the SMA1000 branch to be deployed",
+            "elements": [
+              {
+                "name": "smaBranch",
+                "type": "Microsoft.Common.OptionsGroup",
+                "label": "SMA Branch",
+                "defaultValue": "12.4.2",
+                "constraints": {
+                  "allowedValues": [
+                    {
+                      "label": "12.4.2",
+                      "value": "12.4.2"
+                    },
+                    {
+                      "label": "12.4.1",
+                      "value": "12.4.1"
+                    },
+                    {
+                      "label": "12.4.0",
+                      "value": "12.4.0"
+                    }
+                  ],
+                  "required": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "centralManagement",
+        "label": "Central Management",
+        "subLabel": {
+          "preValidation": "Configure central management",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Central Management",
+        "elements": [
+          {
+            "name": "centralManagementSection",
+            "type": "Microsoft.Common.Section",
+            "label": "Centralized management for your SMA1000 VPN deployment",
+            "elements": [
+              {
+                "name": "centralManagementInfo",
+                "type": "Microsoft.Common.InfoBox",
+                "visible": true,
+                "options": {
+                  "icon": "Info",
+                  "text": "SonicWall Central Management Server (CMS) provides organizations, distributed enterprises and service providers with a powerful and intuitive solution to centrally manage and rapidly deploy SonicWall Secure Mobile Access (SMA) solutions. For mid-size or large enterprises, CMS streamlines security policy management and appliance deployment, minimizing administration overhead. For Service Providers, CMS simplifies the security management of multiple clients and creates additional revenue opportunities. Administrators can cluster CMS solutions for added redundancy and scalability.",
+                  "uri": "https://d3ik27cqx8s5ub.cloudfront.net/media/uploads/2019/08/Datasheet-CMSforSMA-US-VG-677-FINAL.pdf"
+                }
+              },
+              {
+                "name": "CMSDeploy",
+                "type": "Microsoft.Common.OptionsGroup",
+                "label": "Deploy CMS?",
+                "defaultValue": "Yes",
+                "toolTip": "Indicates if you wish to deploy a Central Management Server (CMS).",
+                "constraints": {
+                  "allowedValues": [
+                    {
+                      "label": "Yes",
+                      "value": true
+                    },
+                    {
+                      "label": "No",
+                      "value": false
+                    }
+                  ],
+                  "required": true
+                }
+              },
+              {
+                "name": "CMSSize",
+                "type": "Microsoft.Compute.SizeSelector",
+                "label": "Size",
+                "toolTip": "Specify the instance size for your Central Management Server (CMS) virtual machine.",
+                "recommendedSizes": [
+                  "Standard_D2_v3"
+                ],
+                "options": {
+                  "hideDiskTypeFilter": false
+                },
+                "osPlatform": "Linux",
+                "count": 1,
+                "constraints": {
+                  "required": "[steps('centralManagement').centralManagementSection.CMSDeploy]"
+                },
+                "visible": "[steps('centralManagement').centralManagementSection.CMSDeploy]"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "appliances",
+        "label": "VPN Appliances",
+        "subLabel": {
+          "preValidation": "Configure VPN appliances",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "VPN Appliances",
+        "elements": [
+          {
+            "name": "appliancesSection",
+            "type": "Microsoft.Common.Section",
+            "label": "Customize your SMA1000 VPN appliances",
+            "elements": [
+              {
+                "name": "appliancesCount",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Count",
+                "defaultValue": "3",
+                "toolTip": "Specify the number of SMA1000 VPN appliances you wish to deploy.",
+                "constraints": {
+                  "required": true,
+                  "regex": "^(?:[0-9]|[1-9][0-9]|100)$",
+                  "validationMessage": "Must be a valid integer between 0 and 100."
+                }
+              },
+              {
+                "name": "appliancesSize",
+                "type": "Microsoft.Compute.SizeSelector",
+                "label": "Size",
+                "toolTip": "Specify the instance size for your SMA1000 VPN appliance virtual machine(s).",
+                "recommendedSizes": [
+                  "Standard_F2",
+                  "Standard_F4s_v2",
+                  "Standard_F8s_v2"
+                ],
+                "constraints": {
+                  "allowedSizes": [
+                    "Standard_F2",
+                    "Standard_F4s_v2",
+                    "Standard_F8s_v2"
+                  ]
+                },
+                "options": {
+                  "hideDiskTypeFilter": false
+                },
+                "osPlatform": "Linux",
+                "count": "[steps('appliances').appliancesSection.appliancesCount]",
+                "visible": "[greater(steps('appliances').appliancesSection.appliancesCount, 0)]"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "networking",
+        "label": "Networking",
+        "subLabel": {
+          "preValidation": "Configure virtual network",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Networking",
+        "elements": [
+          {
+            "name": "virtualNetwork",
+            "type": "Microsoft.Network.VirtualNetworkCombo",
+            "label": {
+              "virtualNetwork": "Virtual Network",
+              "subnets": "Subnet"
+            },
+            "toolTip": {
+              "virtualNetwork": "Only virtual networks in the currently selected subscription and location are listed. If you choose to a create a new virtual network, it will be created in the same subscription, location and resource group specified in the Basics step.",
+              "subnets": "Only subnets in the selected virtual network are listed."
+            },
+            "defaultValue": {
+              "name": "[concat('vnet-prod-', location(), '-001')]",
+              "addressPrefixSize": "/16"
+            },
+            "constraints": {
+              "minAddressPrefixSize": "/32"
+            },
+            "options": {
+              "hideExisting": false
+            },
+            "subnets": {
+              "subnet1": {
+                "label": "Subnet",
+                "defaultValue": {
+                  "name": "snet-001",
+                  "addressPrefixSize": "/24"
+                },
+                "constraints": {
+                  "minAddressPrefixSize": "/32"
+                }
+              }
+            }
+          },
+          {
+            "name": "vpnAccessCIDR",
+            "type": "Microsoft.Common.TextBox",
+            "label": "VPN Access CIDR",
+            "toolTip": "Allow access to VPN and Workplace resources only from this IP range.",
+            "defaultValue": "0.0.0.0/0",
+            "constraints": {
+              "required": true,
+              "regex": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
+              "validationMessage": "Must be a valid CIDR block."
+            },
+            "visible": "[greater(steps('appliances').appliancesSection.appliancesCount, 0)]"
+          },
+          {
+            "name": "adminCIDR",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Admin CIDR",
+            "toolTip": "Allow administrative traffic only from this IP range.",
+            "defaultValue": "0.0.0.0/0",
+            "constraints": {
+              "required": true,
+              "regex": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
+              "validationMessage": "Must be a valid CIDR block."
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "adminCIDR": "[steps('networking').adminCIDR]",
+      "adminPassword": "[basics('adminPassword')]",
+      "appliancesCount": "[int(steps('appliances').appliancesSection.appliancesCount)]",
+      "appliancesSize": "[steps('appliances').appliancesSection.appliancesSize]",
+      "CMSDeploy": "[steps('centralManagement').centralManagementSection.CMSDeploy]",
+      "CMSSize": "[steps('centralManagement').centralManagementSection.CMSSize]",
+      "location": "[location()]",
+      "smaBranch": "[steps('smaBranch').smaBranchSection.smaBranch]",
+      "sshPublicKey": "[basics('sshPublicKey').sshPublicKey]",
+      "subnetName": "[steps('networking').virtualNetwork.subnets.subnet1.name]",
+      "subnetCIDR": "[steps('networking').virtualNetwork.subnets.subnet1.addressPrefix]",
+      "subnetResourceGroup": "[steps('networking').virtualNetwork.resourceGroup]",
+      "virtualNetworkCIDR": "[first(steps('networking').virtualNetwork.addressPrefixes)]",
+      "virtualNetworkName": "[steps('networking').virtualNetwork.name]",
+      "virtualNetworkCreate": "[equals(steps('networking').virtualNetwork.newOrExisting, 'new')]",
+      "vpnAccessCIDR": "[steps('networking').vpnAccessCIDR]"
+    }
+  }
+}
